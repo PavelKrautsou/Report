@@ -1,0 +1,233 @@
+---
+title: "Learning from Disaster"
+author: "Pavel Krautsou"
+date: "Sunday, September 14, 2014"
+output: html_document
+---
+The goal of this study is to predict survival of passangers on RMS Titanic. We are given 891 observations as a training set and 418 as test set. The goal is to make accurate predictions on the test set. 
+
+Variable descriptions can be obtained with this link:  http://www.kaggle.com/c/titanic-gettingStarted/data. I'll assume that the reader is now familiar with the variables and no further explanation of their meaning is nessesary.
+
+
+PassengerId, Name and Ticket  variables were excluded from the dataset after immediate inspection. PassengerId has totally arbitrary values. While name does include interasting information such as title and common surnames that can help identify relatives, but this variable was excluded from test set for obvious reasons. So i've decided to exclude it from my analysis. Ticket variable has too many unique values and better served as a identificator then predictive variable.
+``` {r include = FALSE}
+require(dplyr)
+require(plyr)
+require(randomForest)
+require(e1071)
+require(gbm)
+```
+
+
+``` {r}
+setwd("C:/titanic")
+test <- read.csv("test.csv", na.strings = c("NA", ""))
+train$Pclass <- factor(train$Pclass)
+test$Pclass <- factor(test$Pclass) 
+
+data = select(train,
+              Survived,
+              Sex,
+              Pclass,
+              Age,
+              SibSp,
+              Parch,
+              Fare,
+              Embarked)
+```
+
+First variable to be investigated is Passanger Class. Plot below shows survival rate by class.
+
+```{r echo = FALSE}
+
+par(mfrow = c(1,1))
+barplot(count(data$Pclass[data$Survived == 1])[,2]/count(data$Pclass)[,2], 
+        c(1,1,1), col = c("white","grey","black"),names.arg = c("First","Second","Third"),
+        main= "Survive rate byPassenger Class")
+legend("topright", legend = c("First","Second", "Third"), fill = c("white","grey","black"))
+```
+As we can see passengers on the first class had a better chance for survival then others. While passengers of third class were least fortunate. This clear difference allows us to think that passenger class ann be good predictor of passenger survival.
+Next we examine gender as a possible predictor of survival rate.
+```{r echo = FALSE}
+barplot(count(data$Sex[data$Survived == 1])[,2]/ count(data$Sex)[,2], c(1,1), col = c("white","grey"),
+        main= "Survive rate by Gender", names.arg = c("Female","Male"))
+        
+```
+
+Interaction between gender and class show even greater disparity between males and females.
+```{r echo = FALSE}
+barplot(count(train$Pclass[train$Survived == 1 & train$Sex == "male"])[,2]/
+                                                  count(train$Pclass[train$Sex == "male"])[,2], 
+        c(1,1,1), col = c("white","grey","black"),names.arg = c("First","Second","Third"),
+        main= "Male Survive rate by Passenger Class")
+
+barplot(count(train$Pclass[train$Survived == 1 & train$Sex == "female"])[,2]/
+          count(train$Pclass[train$Sex == "female"])[,2], 
+        c(1,1,1), col = c("white","grey","black"),names.arg = c("First","Second","Third"),
+        main= "Female Survive rate by Passenger Class")
+```
+
+Port of embarkation does not seem like a good predictor of survival from the standpoint of common sense. And it is probably not. Overall, there seem to be correlation of survival rate and port of embarkation judging from a plot(a). But it seems that socio-economic status of the passengers embarked in the different ports is more to do with that. Other plots(b,c,d) indicate the different proportion of passengers by class.
+
+```{r echo =FALSE}
+
+barplot(count(na.omit(train$Embarked[train$Survived == 1]))[,2]/count(na.omit(train$Embarked))[,2], 
+        c(1,1,1), col = c("white","grey","black"),names.arg = c("C","Q","S"),
+        main= "Survive rate by Port of Embarkation", xlab = "a")
+
+
+barplot(count(train$Pclass[na.omit(train$Embarked) == "C"])[,2]/
+          length(train$Embarked[na.omit(train$Embarked) == "C"]), 
+        c(1,1,1), col = c("white","grey","black"),names.arg = c("First","Second","Third"),
+        main= "Passangers embarked in Cherbourg by Class", xlab = "b")
+
+
+barplot(count(train$Pclass[na.omit(train$Embarked) == "Q"])[,2]/
+          length(train$Embarked[na.omit(train$Embarked) == "Q"]), 
+        c(1,1,1), col = c("white","grey","black"),names.arg = c("First","Second","Third"),
+        main= "Passangers embarked in Queenstown by Class", xlab = "c")
+
+
+barplot(count(train$Pclass[na.omit(train$Embarked) == "S"])[,2]/
+          length(train$Embarked[na.omit(train$Embarked) == "S"]), 
+        c(1,1,1), col = c("white","grey","black"),names.arg = c("First","Second","Third"),
+        main= "Passangers embarked in Southampton by Class", xlab = "d")
+```
+
+Age is an interesting fact, while age by itself doesn't seem like a strong indicator, though Welch Two Sample t-test shows difference of means between survivors and perished. It's the interaction with Pclass that shows that younger people had a much better chance of survival more abruptly.
+
+``` {r echo = FALSE}
+
+Survivers <- train[train$Survived == 1,]
+Non_Survivers <- train[train$Survived == 0,]
+par(mfrow = c(1,2))
+boxplot(Survivers$Age, main = "Survivers", xlab = "All passangers", ylim = c(0,80))
+boxplot(Non_Survivers$Age, main = "Non_Survivers", xlab = "All passangers", ylim = c(0,80))
+
+boxplot(Survivers$Age[Survivers$Pclass == 1], main = "Survivers", xlab = "First Class", ylim = c(0,80))
+boxplot(Non_Survivers$Age[Non_Survivers$Pclass == 1], main = "Non_Survivers", xlab = "First Class", ylim = c(0,80))
+
+boxplot(Survivers$Age[Survivers$Pclass == 2], main = "Survivers", xlab = "Second Class", ylim = c(0,80))
+boxplot(Non_Survivers$Age[Non_Survivers$Pclass == 2], main = "Non_Survivers", xlab = "Second Class", ylim = c(0,80))
+
+boxplot(Survivers$Age[Survivers$Pclass == 3], main = "Survivers", xlab = "Third Class", ylim = c(0,80))
+boxplot(Non_Survivers$Age[Non_Survivers$Pclass == 3], main = "Non_Survivers", xlab = "Third Class", ylim = c(0,80))
+```
+
+There are 177 missing values for Age in a training set and 86 in test set. So before proceeding in training our model we must input the age data. Test set also has one missing value of Fare. I used median value to input Fare and created separate model for inputting Age values.
+``` {r}
+
+train_age <- select(train,
+              Sex,
+              Pclass,
+              Age,
+              SibSp,
+              Parch,
+              Fare
+              )
+test_age <- select(test,
+              Sex,
+              Pclass,
+              Age,
+              SibSp,
+              Parch,
+              Fare)
+            
+age_input_data <- rbind(train_age,test_age)
+age_input_data$Pclass <- factor(age_input_data$Pclass)
+age_input_data$Fare[is.na(age_input_data$Fare)] <- median(age_input_data$Fare, na.rm = TRUE)
+age_input_train <- age_input_data[!(is.na(age_input_data$Age)),]
+age_input_pred <- age_input_data[is.na(age_input_data$Age),]
+
+
+age_input_mod <- randomForest(Age~., data = age_input_train,mtry=2)
+prediction <- predict(age_input_mod, newdata = age_input_pred[,-3])
+age_input_data[is.na(age_input_data$Age),3] <- prediction
+```
+
+Now we can proceed to training our models. Though Cabin variable could have been good predictor if all data was available, I opted  not using it as most of the data was missing. And a simple factor of missing/non-missing observation was not helpful. Another manipulation with creating levels by using first letter of the cabin was not helpfull either.
+```{r}
+mod_data <- select(train,
+                   Survived,
+                   Sex,
+                   Pclass,
+                   Age,
+                   SibSp,
+                   Parch,
+                   Fare
+                   )
+
+mod_test <- select(test,
+                   Sex,
+                   Pclass,
+                   Age,
+                   SibSp,
+                   Parch,
+                   Fare
+                   )
+
+
+```
+The first model to use as baseline is logistic regression. I used 10-fold cross-validation to select variables from set below.
+First we input our predicted age data into our training set.
+
+```{r}
+mod_data$Age = age_input_data$Age[1:891]
+mod_test$Age = age_input_data$Age[892:1309]
+mod_test$Fare[is.na(mod_test$Fare)] = median(age_input_data$Fare, na.rm = TRUE)
+```
+
+Now we can proceed to using cross-validation to tune our first model. Below is list of combinations of variables that has been used in CV.```{r}
+formulas <- list(Survived~.+ Pclass:Age +Parch:Age + SibSp:Sex,
+                 Survived~.+ Pclass:Age +Parch:Age,
+                 Survived~.+ Parch:Age + SibSp:Sex,
+                 Survived~.+ Pclass:Age + SibSp:Sex,
+                 Survived~.+ Pclass:Age,
+                 Survived~.+ SibSp:Sex,
+                 Survived~.+ Parch:Age,
+                 Survived~.,
+                 Survived~.-Parch,Survived~.-Parch - SibSp,
+                 Survived~.-Parch,Survived~.-Parch - SibSp -Fare)
+```
+
+
+The model using Survived~.+ Pclass:Age + SibSp:Sex perfomed best on cross-validation showing 0.8146067 accuracy. On a test set it showed 0.76077 accuracy. 
+You can see the script for cross-validation following that link:https://github.com/PavelKrautsou/Report/blob/master/lm_tune.R
+
+The second model is a Support Vector Machine with polynomial kernel. Parameters of this model were tuned again using 10-fold cross-validation.R package e1071 has a tune function that allows to perform this procedure.
+
+
+```{r}
+tune.out=tune(svm , factor(Survived)~.+ Pclass:Age, data=mod_data, kernel ="polynomial",scale = TRUE,
+              ranges=list(cost=c(0.5,1,2,2.5,3),
+                          degree=c(2,3,4,5) ))
+
+
+```
+
+While I tried several SVM models the model with cost = 2, degree = 3 performed quite well on the test set, it achieved 0.80861 accuracy. Training svm with radial kernel performed better during cross-validation showing 83% accuracy, but was not as good on the test set showing 0.77512 accuracy.
+
+Another method is a Generalized Boosted Model. Here I again perfomed 10 fold cross-validation controlling several parameters. While gbm package in R has a gbmCrossVal function, I opted using a simple program for cross-validation. As it seemed an easier path. I used both mean and minimum accuracy on validation set as metric for choosing the parameters for the model. You can see the script for cross-validation following this link: https://github.com/PavelKrautsou/Report/blob/master/gbm_CV.R
+
+This models didn't perform as well on the test set with only 0.75120 for the model using minimum accuracy as a metric. Using mean
+accuracy on the cross-validation set as a metric didn't help much either as the best model(shown below) achieved 0.77512 accuracy on the test set. 
+```{r}
+mod <- gbm(Survived~. - Parch -SibSp, data = mod_data, 
+           interaction.depth = 4,
+           shrinkage = 0.01,
+           n.trees = 1000,
+           verbose = FALSE,
+           distribution = "bernoulli"
+           )
+par(mfrow = c(1,1))
+summary(mod)
+```
+
+Another possible model is random forest algorithm. It has one tuning parameter "mtry". If a mtry parameter is equal to the number of predictors we would get bagged model. So we can perform cross-validation and check two possible methods at once. 
+Random forest model with mtry = 2 performed best on cross-validation. On the test set it achieved 0.77512 accuracy.
+```{r}
+RandomForest <- randomForest(factor(Survived)~., mtry =2, data = mod_data,importance=TRUE)
+varImpPlot(RandomForest)
+```
+
+Support Vector Machine proved to be best suited for this task as we don't need to interpret the results. Other methods show relative impact of each variable, but their predictive power is not as strong for this particular task.
