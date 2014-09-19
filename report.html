@@ -62,6 +62,7 @@ if (window.hljs && document.readyState && document.readyState === "complete") {
 <p>Variable descriptions can be obtained with this link: <a href="http://www.kaggle.com/c/titanic-gettingStarted/data">http://www.kaggle.com/c/titanic-gettingStarted/data</a>. I’ll assume that the reader is now familiar with the variables and no further explanation of their meaning is nessesary.</p>
 <p>PassengerId, Name and Ticket variables were excluded from the dataset after immediate inspection. PassengerId has totally arbitrary values. While name does include interasting information such as title and common surnames that can help identify relatives, but this variable was excluded from test set for obvious reasons. So i’ve decided to exclude it from my analysis. Ticket variable has too many unique values and better served as a identificator then predictive variable.</p>
 <pre class="r"><code>setwd(&quot;C:/titanic&quot;)
+train &lt;- read.csv(&quot;train.csv&quot;, na.strings = c(&quot;NA&quot;, &quot;&quot;))
 test &lt;- read.csv(&quot;test.csv&quot;, na.strings = c(&quot;NA&quot;, &quot;&quot;))
 train$Pclass &lt;- factor(train$Pclass)
 test$Pclass &lt;- factor(test$Pclass) 
