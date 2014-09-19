@@ -20,5 +20,4 @@ for(m in ms){
   results = rbind(results, temp)
 }
 
-mod <- randomForest(factor(Survived)~., mtry =2, data = mod_data,importance=TRUE)
-varImpPlot(mod)
+results
