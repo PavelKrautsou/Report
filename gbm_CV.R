@@ -56,6 +56,5 @@ acc <- mean(rec)
 temp <- list(acc = acc,trees =tree, shrinkage =lambda,depth =depth)
 results = rbind(results, temp)
 }}}
-which(results[,1] == max(results[,1]))
-write.table(results, "gbm_cross_F.csv",sep =",", quote = FALSE)
+results
                                       
